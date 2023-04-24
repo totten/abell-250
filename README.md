@@ -1,4 +1,4 @@
-# Overview
+# Overview: Abell 250
 
 Example management repo for Nebula hosts
 
@@ -32,6 +32,11 @@ cd ..
 ./bin/abell add server my-vm2            --ip='10.250.2.4/16'
 ./bin/abell add server my-server1        --ip='10.250.2.5/16'
 ```
+
+These commands generate keys and installation-files in [`./hosts`](./hosts). Each host has:
+
+* PKI Files (`host.key`, `host.pub`, `host.crt`)
+* Installer files (extractable `abell-250-hostname.tar.gz` or executable `abell-250-hostname.bin`)
 
 # Add a new host
 
