@@ -1,0 +1,13 @@
+[Unit]
+Description=Nebula for Abell-250
+Wants=basic.target network-online.target nss-lookup.target time-sync.target
+After=basic.target network.target network-online.target
+
+[Service]
+WorkingDirectory=/opt/nebula/abell-250/etc
+ExecReload=/bin/kill -HUP $MAINPID
+ExecStart=/opt/nebula/abell-250/bin/nebula -config config.d/
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

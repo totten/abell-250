@@ -1,0 +1,140 @@
+#!/usr/bin/env pogo
+<?php
+
+###############################################################################
+#### Imports
+
+#!depdir '{SCRIPT_DIR}/../../build'
+#!ttl 10 years
+#!require clippy/std: ~0.4.2
+#!require clippy/container: '~1.2'
+
+namespace Clippy;
+
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Question\ChoiceQuestion;
+use Symfony\Component\Console\Style\SymfonyStyle;
+
+$c = clippy()->register(plugins());
+
+###############################################################################
+## Constants / Utilities / Helpers
+
+$c['types'] = function () {
+  return ['server', 'workstation', 'lighthouse'];
+};
+
+$c['basedir'] = function (): string {
+  return dirname(realpath(pogo_script_dir()));
+};
+
+$c['defaultDuration'] = function() {
+  return (2 * 24 * 364) . 'h';
+};
+
+$c['validateName()'] = function (string $name): bool {
+  return preg_match(';^([a-z0-9]+)-[a-z0-9]+$;', $name);
+};
+
+$c['readCert()'] = function (string $name, ?Cmdr $cmdr = NULL) {
+  $cmdr->run('nebula-cert print -json -path {{0|s}}', ["hosts/$name/host.crt"]);
+};
+
+$c['wantFile()'] = function (string $name, ?SymfonyStyle $io = NULL, $input = NULL) {
+  return !file_exists($name) || $input->getOption('force') || $io->confirm("File <comment>$name</comment> exists. Overwrite?");
+};
+
+###############################################################################
+## Subcommands
+
+$c['app']->command('add type name [--ip=] [-N|--dry-run] [-S|--step] [-f|--force]', function (string $type, string $name, ?string $ip, Taskr $taskr, SymfonyStyle $io) use ($c) {
+  if (!in_array($type, $c['types'])) {
+    throw new \Exception("Invalid type ($type). Specify one of: " . implode(', ', $c['types']));
+  }
+  if (!$c['validateName()']($name)) {
+    throw new \Exception("Malformed name ($name)");
+  }
+  if (empty($ip)) {
+    // FIXME
+    throw new \Exception("Please specify --ip manually.");
+  }
+
+  $caDir = $c['basedir'] . '/certs';
+  $hostDir = $c['basedir'] . '/hosts/' . $name;
+  $typeFile = "$hostDir/host.type";
+  $keyFile = "$hostDir/host.key";
+  $pubFile = "$hostDir/host.pub";
+  $crtFile = "$hostDir/host.crt";
+  $tarFile = "$hostDir/abell-250-$name.tar.gz";
+  $binFile = "$hostDir/abell-250-$name.bin";
+
+  foreach ([$hostDir, "$hostDir/config.d"] as $dir) {
+    if (!is_dir($hostDir)) {
+      mkdir($dir, 0777, TRUE);
+    }
+  }
+
+  if ($c['wantFile()']($typeFile)) {
+    $io->writeln("Generate <comment>$typeFile</comment>");
+    file_put_contents($typeFile, $type);
+  }
+
+  if (!file_exists($keyFile)) {
+    $io->writeln("Generate <comment>$keyFile</comment>");
+    $io->writeln("Generate <comment>$pubFile</comment>");
+    $taskr->passthru('nebula-cert keygen -out-key {{0|s}} -out-pub {{1|s}}', [$keyFile, $pubFile]);
+  }
+
+  if ($c['wantFile()']($crtFile)) {
+    file_exists($crtFile) && unlink($crtFile);
+    $options = [
+      '-name',
+      $name,
+      '-duration',
+      $c['defaultDuration'],
+      '-ip',
+      $ip,
+      '-groups',
+      $type,
+      '-out-crt',
+      $crtFile,
+      '-in-pub',
+      $pubFile,
+    ];
+    $io->writeln("Generate <comment>$crtFile</comment>");
+    $taskr->passthru('cd {{0|s}} && nebula-cert sign {{1|@s}}', [$caDir, $options]);
+  }
+
+  $bundle = [
+    "installer/install.sh",
+    "certs/ca.crt",
+    "hosts/$name/host.type",
+    "hosts/$name/host.key",
+    "hosts/$name/host.pub",
+    "hosts/$name/host.crt",
+    "config/systemd.service",
+    "config/$type.yml",
+  ];
+  switch ($type) {
+    case 'server':
+    case 'workstation':
+      $bundle[] = "config/network.yml";
+      break;
+  }
+
+  if ($c['wantFile()']($tarFile)) {
+    file_exists($tarFile) && unlink($tarFile);
+    $io->writeln("Generate <comment>$tarFile</comment>");
+    $taskr->passthru('tar czf {{0|s}} {{1|@s}}', [$tarFile, $bundle]);
+  }
+  if ($c['wantFile()']($binFile)) {
+    file_exists($binFile) && unlink($binFile);
+    $io->writeln("Generate <comment>$binFile</comment>");
+    $taskr->passthru('cat {{0|@s}} > {{1|@s}} && chmod 755 {{1|s}}', [['installer/header.sh', $tarFile], $binFile]);
+  }
+});
+
+###############################################################################
+## Go!
+
+$c['app']->run();

@@ -1,0 +1,8 @@
+static_host_map:
+  "10.250.31.2": ["my-lighthouse.example.com:4242", "44.55.66.77':4242"]
+
+lighthouse:
+  am_lighthouse: false
+  interval: 60
+  hosts:
+    - "10.250.31.2"

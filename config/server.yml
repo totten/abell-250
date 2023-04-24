@@ -1,0 +1,32 @@
+pki:
+  ca: ca.crt
+  cert: host.crt
+  key: host.key
+
+listen:
+  host: 0.0.0.0
+  port: 4242
+
+punchy:
+  punch: true
+
+relay:
+  am_relay: false
+  use_relays: true
+
+firewall:
+  conntrack:
+    tcp_timeout: 12m
+    udp_timeout: 3m
+    default_timeout: 10m
+  outbound:
+    - port: any
+      proto: any
+      host: any
+  inbound:
+    - port: any
+      proto: icmp
+      host: any
+    - port: any
+      proto: tcp
+      host: any
